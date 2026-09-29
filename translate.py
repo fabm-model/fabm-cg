@@ -490,6 +490,7 @@ class Visitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> Expression:
         """Translate a function or method call to a Fortran call expression."""
+        assert not node.keywords, "keyword arguments are not supported"
         node.func.called = True
         fn = self.visit(node.func)
         assert isinstance(fn, Function)
