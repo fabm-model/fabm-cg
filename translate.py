@@ -169,6 +169,14 @@ class Block(collections.UserList["Block | Expression"]):
             f.write("\n")
 
 
+class FixedReturnType:
+    def __init__(self, return_type: type):
+        self.return_type = return_type
+
+    def __call__(self, *args, **kwargs) -> type:
+        return self.return_type
+
+
 def get_type_from_args(*args: Expression) -> type:
     types = {arg.type for arg in args}
     if float in types:
@@ -265,8 +273,8 @@ class Visitor(ast.NodeVisitor):
             if isinstance(child, ast.FunctionDef):
                 translated_function = self.visit(child)
                 functions.append(translated_function)
-                self.functions[child.name] = self._function_return_type(
-                    translated_function
+                self.functions[child.name] = FixedReturnType(
+                    translated_function.return_type
                 )
 
         classes: list[tuple[Block, Block]] = []
@@ -274,10 +282,6 @@ class Visitor(ast.NodeVisitor):
             if isinstance(n, ast.ClassDef):
                 classes.append(self.visit(n))
         return self.translate_module(self.module.__name__, classes, functions, globals)
-
-    @staticmethod
-    def _function_return_type(function: Block) -> Callable[..., type]:
-        return lambda *args, **kwargs: function.return_type
 
     def visit_ClassDef(self, node: ast.ClassDef) -> tuple[Block, Block]:
         """Visit a class definition that must subclass :class:`ingredients.Model`.
