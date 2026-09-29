@@ -76,8 +76,12 @@ class FloatParameter(Parameter[float]):
         *,
         default: Optional[float] = None,
         scale_factor: float = 1.0,
+        minimum: Optional[float] = None,
+        maximum: Optional[float] = None,
     ):
         self.scale_factor = scale_factor
+        self.minimum = minimum
+        self.maximum = maximum
         super().__init__(long_name, units, default=default, type=float)
 
     def transform(self, value: float) -> float:
