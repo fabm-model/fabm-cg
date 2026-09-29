@@ -317,6 +317,6 @@ class Model:
             state: State = getattr(self, name)
             state.source._value = 0.0
         for name in self.interior_state_variables:
-            state: InteriorState = getattr(self, name)
-            state.bottom_flux._value = 0.0
-            state.surface_flux._value = 0.0
+            interior_state: InteriorState = getattr(self, name)
+            interior_state.bottom_flux._value = 0.0
+            interior_state.surface_flux._value = 0.0
