@@ -35,6 +35,9 @@ class Base(Generic[T, VT]):
     def __set_name__(self, owner: Type["Model"], name: str) -> None:
         self.name = name
         self._name = "_" + name
+        # Ensure the subclass has its own private list of variables
+        if "_vars" not in owner.__dict__:
+            owner._vars = []
         owner._vars.append(self)
 
     @overload
