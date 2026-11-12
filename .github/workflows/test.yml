@@ -24,4 +24,4 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: conda install numpy
       - run: python ergom.py
-      - run: python translate.py ergom.py ergom.F90
+      - run: python -m fabmcg.translators.fabm ergom.py ergom.F90

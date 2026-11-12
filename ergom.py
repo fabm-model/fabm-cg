@@ -1,4 +1,4 @@
-from ingredients import (
+from fabmcg.ingredients import (
     Dependency,
     SurfaceDependency,
     BottomDependency,
