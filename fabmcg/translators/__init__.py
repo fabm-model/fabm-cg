@@ -1,32 +1,3 @@
-#!/usr/bin/env python
-"""Translate a Python-based FABM model description into a Fortran/FABM module.
-
-The translator loads a Python source file that defines one or more
-:class:`ingredients.Model` subclasses and optional helper functions, parses it
-into an abstract syntax tree (AST), and emits an equivalent Fortran 90 source
-file that is compatible with the Framework for Aquatic Biogeochemical Models
-(FABM).
-
-Example:
-    From the command line::
-
-        python translate.py ergom.py ergom.F90
-
-    Programmatically::
-
-        from translate import translate
-        translate("ergom.py", "ergom.F90")
-
-Key components:
-    * :class:`Block` — a nestable list of Fortran source lines with indentation
-      support.
-    * :class:`Visitor` — base AST visitor that collects type information and
-      dispatches to concrete translation helpers.
-    * :class:`FABMTranslator` — concrete subclass of :class:`Visitor` that emits
-      FABM-specific Fortran constructs (``type_base_model`` extensions, loop
-      macros, registration calls, …).
-"""
-
 import ast
 from typing import Any, TextIO, Union, Type
 from types import ModuleType
@@ -505,14 +476,12 @@ class Visitor(ast.NodeVisitor):
         return Expression(value)
 
     @classmethod
-    def translate(cls, fn: os.PathLike, outpath: os.PathLike | None = None):
-        """Translate a Python FABM model file to a Fortran source file.
+    def translate(cls, fn: os.PathLike, outpath: os.PathLike | None = None) -> Block:
+        """Translate a Python FABM model file.
 
         The function imports the specified file as a Python module (so that
         class/attribute metadata defined at runtime is available), then parses
         the same file as an Abstract Syntax Tree (AST).
-        An :class:`FABMTranslator` visitor walks the tree and produces a
-        :class:`Block` tree, which is written out as indented Fortran source.
 
         Args:
             fn: Path to the input Python source file.
@@ -540,4 +509,6 @@ class Visitor(ast.NodeVisitor):
         translation.write(out)
         if out is not sys.stdout:
             out.close()
+
+        return translation
 

@@ -82,7 +82,7 @@ class ERGOM(Model):
     po = InteriorStateVariable("phosphate", "mmol P m-3", initial_value=4.5)
     fl = BottomStateVariable("fluff", "mmol N m-2", initial_value=0.0)
 
-    PAR = DiagnosticVariable("photosynthetically active radiation", "W/m2")
+    PARd = DiagnosticVariable("photosynthetically active radiation", "W/m2")
     GPP = DiagnosticVariable("gross primary production", "mmol/m3")
     NCP = DiagnosticVariable("net community production", "mmol/m3")
     PPR = DiagnosticVariable("gross primary production rate", "mmol/m3/d")
@@ -225,7 +225,7 @@ class ERGOM(Model):
         )
 
         # Set diagnostic variables
-        self.PAR = self.par
+        self.PARd = self.par
         self.GPP = r1 + r2 + r3
         self.NCP = r1 + r2 + r3 - self.lpa * (self.p1 + self.p2 + self.p3)
         self.PPR = (r1 + r2 + r3) * secs_pr_day

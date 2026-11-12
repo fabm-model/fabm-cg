@@ -1,4 +1,29 @@
+"""Translate a Python-based FABM model description into a Fortran/FABM module.
+
+The translator loads a Python source file that defines one or more
+:class:`ingredients.Model` subclasses and optional helper functions, parses it
+into an abstract syntax tree (AST), and emits an equivalent Fortran 90 source
+file that is compatible with the Framework for Aquatic Biogeochemical Models
+(FABM).
+
+Example:
+    From the command line::
+
+        python -m fabmcg.translators.fabm ergom.py ergom.F90
+
+    Programmatically::
+
+        from fabmcg.translators.fabm import Translator
+        Translator.translate("ergom.py", "ergom.F90")
+
+Key components:
+    * :class:`Translator` — concrete subclass of :class:`Visitor` that emits
+      FABM-specific Fortran constructs (``type_base_model`` extensions, loop
+      macros, registration calls, …).
+"""
+
 from . import Visitor, Block, Expression, Any
+from types import ModuleType
 import ast
 from collections.abc import Iterable, Mapping
 import argparse
@@ -12,7 +37,7 @@ from .. import ingredients
 FORTRAN_TYPES = {float: "real(rk)", int: "integer", bool: "logical"}
 
 
-class FABMTranslator(Visitor):
+class Translator(Visitor):
     """Concrete translator that emits FABM-compatible Fortran source.
 
     Inherits all AST visiting logic from :class:`Visitor` and provides the
@@ -89,7 +114,7 @@ class FABMTranslator(Visitor):
             contains.extend(class_body)
         for function_body in functions:
             contains.extend(function_body)
-        return Block(
+        module_block = Block(
             [
                 '#include "fabm_driver.h"',
                 f"module {name}",
@@ -100,6 +125,10 @@ class FABMTranslator(Visitor):
             ],
             separate=True,
         )
+        module_block.name = name
+        module_block.model_types = [d.name for d, _ in classes]
+        return module_block
+
 
     def translate_class(
         self, name: str, cls: ingredients.Model, funcs: Mapping[str, Block]
@@ -128,36 +157,45 @@ class FABMTranslator(Visitor):
             func_block.extend(fnbody)
 
         # Translate to Fortran/FABM
-        type_members = Block()
+        # Note that calls to registration routines (register_state_variable,
+        # register_diagnostic_variable, register_dependency) do not need to include
+        # the domain, as they are implemented as generic procedures in FABM.
         initialize_body = Block(
             [
                 f"class(type_{name}), intent(inout), target :: self",
                 "integer, intent(in) :: configunit",
             ]
         )
+        type_members: dict[str, str] = {}
+        def add_member(ftype, name):
+            key = name.lower()
+            if key in type_members:
+                raise ValueError(f"Duplicate type member: {name}")
+            type_members[key] = ftype
+
         for vname, var in cls.state_variables.items():
-            type_members.append(f"type({var.id_type}) :: id_{vname}")
+            add_member(f"type({var.id_type})", f"id_{vname}")
             initialize_body.append(
                 f"call self%register_state_variable("
                 f"self%id_{vname}, '{vname}', '{var.units}', '{var.long_name}'"
                 ")"
             )
         for vname, var in cls.diagnostic_variables.items():
-            type_members.append(f"type({var.id_type}) :: id_{vname}")
+            add_member(f"type({var.id_type})", f"id_{vname}")
             initialize_body.append(
                 f"call self%register_diagnostic_variable("
                 f"self%id_{vname}, '{vname}', '{var.units}', '{var.long_name}'"
                 ")"
             )
         for vname, var in cls.dependencies.items():
-            type_members.append(f"type({var.id_type}) :: id_{vname}")
+            add_member(f"type({var.id_type})", f"id_{vname}")
             initialize_body.append(
                 f"call self%register_dependency("
                 f"self%id_{vname}, '{vname}', '{var.units}', '{var.long_name}'"
                 ")"
             )
         for vname, var in cls.parameters.items():
-            type_members.append(f"{FORTRAN_TYPES[var.type]} :: {vname}")
+            add_member(FORTRAN_TYPES[var.type], vname)
             default = self.translate_constant(var.default)
             initialize_body.append(
                 f"call self%get_parameter("
@@ -168,7 +206,7 @@ class FABMTranslator(Visitor):
         declaration = Block(
             [
                 f"type, extends(type_base_model), public :: type_{name}",
-                type_members,
+                Block(f"{t} :: {n}" for n, t in type_members.items()),
                 "contains",
                 type_contains,
                 "end type",
@@ -182,6 +220,7 @@ class FABMTranslator(Visitor):
             ]
             + func_block
         )
+        declaration.name = name
         return declaration, procedures
 
     def translate_function(
@@ -309,6 +348,57 @@ class FABMTranslator(Visitor):
         assert tp in FORTRAN_TYPES, f"Unsupported type {tp}"
         return super().make_expression(value, tp)
 
+def generate_institute_files(institute_name: str, block: Block):
+    cases = "\n".join(
+        [f"         case ('{name}'); allocate(type_{name}::model)" for name in getattr(block, "model_types", [])]
+    )
+    with open(f"{institute_name}_model_library.F90", "w") as f:
+        f.write(f"""
+module {institute_name}_model_library
+
+   use fabm_types, only: type_base_model_factory, type_base_model
+
+   implicit none
+
+   private
+
+   type, extends(type_base_model_factory) :: type_factory
+   contains
+      procedure :: create
+   end type
+
+   type (type_factory), save, target, public :: {institute_name}_model_factory
+
+contains
+
+   subroutine create(self, name, model)
+
+      use {block.name}
+      ! Add new {institute_name} models here
+
+      class (type_factory), intent(in) :: self
+      character(*),         intent(in) :: name
+      class (type_base_model), pointer :: model
+
+      select case (name)
+{cases}
+         ! Add new {institute_name} models here
+      end select
+
+   end subroutine
+
+end module
+""")
+    with open(f"CMakeLists.txt", "w") as f:
+        f.write(f"""
+add_library(fabm_models_{institute_name} OBJECT
+            {institute_name}_model_library.F90
+            {block.file}
+           )
+
+target_link_libraries(fabm_models_{institute_name} PRIVATE fabm_base)
+""")
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="Python file to convert to FABM/Fortran")
@@ -318,5 +408,10 @@ if __name__ == "__main__":
         nargs="?",
         default=None,
     )
+    parser.add_argument("--institute", help="Create institute files (library, CMakeLists.txt)", default=None)
     args = parser.parse_args()
-    FABMTranslator.translate(args.file, args.out)
+    block = Translator.translate(args.file, args.out)
+
+    if args.institute:
+        block.file = args.out
+        generate_institute_files(args.institute, block)
