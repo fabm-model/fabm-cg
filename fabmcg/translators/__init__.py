@@ -13,7 +13,6 @@ import numpy as np
 from .. import ingredients
 
 
-
 class Expression:
     def __init__(self, value: str, tp: type):
         self.value = value
@@ -131,11 +130,12 @@ class Visitor(ast.NodeVisitor):
             accessed in the current method body; used to emit ``GET`` macro
             calls.
     """
+
     UNARYOPS: Mapping[Type[ast.unaryop], str]
     BINOPS: Mapping[Type[ast.operator], str]
     CMPOPS: Mapping[Type[ast.cmpop], str]
     NUMPY_UFUNCS: Mapping[np.ufunc, str]
-    
+
     def __init__(self, module: ModuleType):
         self.module = module
         self.globals = dict[str, type]()
@@ -511,4 +511,3 @@ class Visitor(ast.NodeVisitor):
             out.close()
 
         return translation
-

@@ -22,8 +22,6 @@ Key components:
       macros, registration calls, …).
 """
 
-from . import Visitor, Block, Expression, Any
-from types import ModuleType
 import ast
 from collections.abc import Iterable, Mapping
 import argparse
@@ -31,7 +29,7 @@ import argparse
 import numpy as np
 
 from .. import ingredients
-
+from . import Visitor, Block, Expression, Any
 
 # Mapping from Python built-in types to their Fortran equivalents.
 FORTRAN_TYPES = {float: "real(rk)", int: "integer", bool: "logical"}
@@ -129,7 +127,6 @@ class Translator(Visitor):
         module_block.model_types = [d.name for d, _ in classes]
         return module_block
 
-
     def translate_class(
         self, name: str, cls: ingredients.Model, funcs: Mapping[str, Block]
     ) -> tuple[Block, Block]:
@@ -167,6 +164,7 @@ class Translator(Visitor):
             ]
         )
         type_members: dict[str, str] = {}
+
         def add_member(ftype, name):
             key = name.lower()
             if key in type_members:
@@ -234,8 +232,6 @@ class Translator(Visitor):
         """Emit a Fortran ``elemental function`` for a module-level Python function.
 
         All arguments are declared ``intent(in)``.
-        The data type of arguments and the return type are inferred from type annotations
-        if available.
         """
         arg_block = Block()
         for argname, argtype in args.items():
@@ -279,14 +275,13 @@ class Translator(Visitor):
             locals: Local variable names and types declared inside the method.
         """
         fname = self.METHODMAP.get(name, name)
-        context = {"process_bottom": "bottom", "process_surface": "surface"}.get(
-            name, "interior"
-        )
+        DOMAINS = {"process_bottom": "bottom", "process_surface": "surface"}
+        domain = DOMAINS.get(name, "interior")
         args, loop = {
             "interior": ("_ARGUMENTS_DO_", "_LOOP_"),
             "bottom": ("_ARGUMENTS_DO_BOTTOM_", "_BOTTOM_LOOP_"),
             "surface": ("_ARGUMENTS_DO_SURFACE_", "_SURFACE_LOOP_"),
-        }[context]
+        }[domain]
         arg_block = Block()
         arg_block.append(f"class (type_{cls.__name__}), intent(in) :: self")
         arg_block.append(f"_DECLARE{args}")
@@ -348,9 +343,13 @@ class Translator(Visitor):
         assert tp in FORTRAN_TYPES, f"Unsupported type {tp}"
         return super().make_expression(value, tp)
 
+
 def generate_institute_files(institute_name: str, block: Block):
     cases = "\n".join(
-        [f"         case ('{name}'); allocate(type_{name}::model)" for name in getattr(block, "model_types", [])]
+        [
+            f"         case ('{name}'); allocate(type_{name}::model)"
+            for name in getattr(block, "model_types", [])
+        ]
     )
     with open(f"{institute_name}_model_library.F90", "w") as f:
         f.write(f"""
@@ -399,6 +398,7 @@ add_library(fabm_models_{institute_name} OBJECT
 target_link_libraries(fabm_models_{institute_name} PRIVATE fabm_base)
 """)
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="Python file to convert to FABM/Fortran")
@@ -408,7 +408,11 @@ if __name__ == "__main__":
         nargs="?",
         default=None,
     )
-    parser.add_argument("--institute", help="Create institute files (library, CMakeLists.txt)", default=None)
+    parser.add_argument(
+        "--institute",
+        help="Create institute files (library, CMakeLists.txt)",
+        default=None,
+    )
     args = parser.parse_args()
     block = Translator.translate(args.file, args.out)
 
