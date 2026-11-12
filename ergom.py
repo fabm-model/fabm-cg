@@ -1,13 +1,12 @@
 from fabmcg.ingredients import (
-    Dependency,
-    SurfaceDependency,
-    BottomDependency,
     DiagnosticVariable,
     Model,
     InteriorStateVariable,
     BottomStateVariable,
     FloatParameter,
     BoolParameter,
+    STANDARD_VARIABLES,
+    StandardDependency
 )
 import numpy as np
 
@@ -88,12 +87,12 @@ class ERGOM(Model):
     PPR = DiagnosticVariable("gross primary production rate", "mmol/m3/d")
     NPR = DiagnosticVariable("net community production rate", "mmol/m3/d")
 
-    I_0 = SurfaceDependency("surface_downwelling_photosynthetic_radiative_flux", "W m-2")
-    par = Dependency("downwelling_photosynthetic_radiative_flux", "W m-2")
-    temp = Dependency("temperature", "degrees_C")
-    salt = Dependency("practical_salinity", "PSU")
-    wind = SurfaceDependency("wind_speed", "m s-1")
-    taub = BottomDependency("bottom_stress", "Pa")
+    I_0 = StandardDependency(STANDARD_VARIABLES.surface_downwelling_photosynthetic_radiative_flux)
+    par = StandardDependency(STANDARD_VARIABLES.downwelling_photosynthetic_radiative_flux)
+    temp = StandardDependency(STANDARD_VARIABLES.temperature)
+    salt = StandardDependency(STANDARD_VARIABLES.practical_salinity)
+    wind = StandardDependency(STANDARD_VARIABLES.wind_speed)
+    taub = StandardDependency(STANDARD_VARIABLES.bottom_stress)
     # fmt: on
 
     def process_interior(self):

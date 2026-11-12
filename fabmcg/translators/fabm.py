@@ -169,7 +169,7 @@ class Translator(Visitor):
             key = name.lower()
             if key in type_members:
                 raise ValueError(f"Duplicate type member: {name}")
-            type_members[key] = ftype
+            type_members[key] = f"{ftype} :: {name}"
 
         for vname, var in cls.state_variables.items():
             add_member(f"type({var.id_type})", f"id_{vname}")
@@ -187,10 +187,12 @@ class Translator(Visitor):
             )
         for vname, var in cls.dependencies.items():
             add_member(f"type({var.id_type})", f"id_{vname}")
+            if isinstance(var, ingredients.StandardDependency):
+                strargs = f"standard_variables%{var.long_name}"
+            else:
+                strargs = f"'{vname}', '{var.units}', '{var.long_name}'"
             initialize_body.append(
-                f"call self%register_dependency("
-                f"self%id_{vname}, '{vname}', '{var.units}', '{var.long_name}'"
-                ")"
+                f"call self%register_dependency(self%id_{vname}, {strargs})"
             )
         for vname, var in cls.parameters.items():
             add_member(FORTRAN_TYPES[var.type], vname)
@@ -204,7 +206,7 @@ class Translator(Visitor):
         declaration = Block(
             [
                 f"type, extends(type_base_model), public :: type_{name}",
-                Block(f"{t} :: {n}" for n, t in type_members.items()),
+                Block(t for t in type_members.values()),
                 "contains",
                 type_contains,
                 "end type",

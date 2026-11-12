@@ -1,3 +1,4 @@
+import enum
 from typing import (
     TypeVar,
     overload,
@@ -10,12 +11,43 @@ from typing import (
     Mapping,
     Union,
     Iterable,
+    NamedTuple,
 )
 
 T = TypeVar("T")
 VT = TypeVar("VT")
 
 import numpy as np
+
+
+class Domain(enum.Enum):
+    INTERIOR = "interior"
+    BOTTOM = "bottom"
+    SURFACE = "surface"
+
+
+class StandardVariable(NamedTuple):
+    long_name: str
+    units: str
+    domain: Domain = Domain.INTERIOR
+
+
+class StandardVariablesTuple:
+    surface_downwelling_photosynthetic_radiative_flux = StandardVariable(
+        "surface_downwelling_photosynthetic_radiative_flux",
+        "W m-2",
+        domain=Domain.SURFACE,
+    )
+    downwelling_photosynthetic_radiative_flux = StandardVariable(
+        "downwelling_photosynthetic_radiative_flux", "W m-2"
+    )
+    temperature = StandardVariable("temperature", "degrees_C")
+    practical_salinity = StandardVariable("practical_salinity", "PSU")
+    wind_speed = StandardVariable("wind_speed", "m s-1", domain=Domain.SURFACE)
+    bottom_stress = StandardVariable("bottom_stress", "Pa", domain=Domain.BOTTOM)
+
+
+STANDARD_VARIABLES = StandardVariablesTuple()
 
 
 class Base(Generic[T, VT]):
@@ -112,6 +144,24 @@ class BottomDependency(BaseDependency):
 class SurfaceDependency(BaseDependency):
     id_type = "type_surface_dependency_id"
     get_macro = "_GET_SURFACE_"
+
+
+class StandardDependency(BaseDependency):
+    def __init__(self, standard_variable: "StandardVariable"):
+        super().__init__(standard_variable.long_name, standard_variable.units)
+        self.standard_variable = standard_variable
+        if standard_variable.domain is None:
+            raise ValueError("Standard variable must have a domain")
+        self.id_type = {
+            Domain.SURFACE: "type_surface_dependency_id",
+            Domain.BOTTOM: "type_bottom_dependency_id",
+            Domain.INTERIOR: "type_dependency_id",
+        }[standard_variable.domain]
+        self.get_macro = {
+            Domain.SURFACE: "_GET_SURFACE_",
+            Domain.BOTTOM: "_GET_BOTTOM_",
+            Domain.INTERIOR: "_GET_",
+        }[standard_variable.domain]
 
 
 class SourceValue:
